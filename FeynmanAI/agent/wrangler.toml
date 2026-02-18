@@ -7,6 +7,12 @@ preview_urls = true
 [observability]
 enabled = true
 
+[vars]
+OPENAI_API_KEY = ""
+ANTHROPIC_API_KEY = ""
+GOOGLE_API_KEY = ""
+SARVAM_API_KEY = ""
+
 [[routes]]
 pattern = "agent.templates.tldraw.dev"
 custom_domain = true

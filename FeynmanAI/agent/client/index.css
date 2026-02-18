@@ -216,6 +216,48 @@ body {
 	cursor: not-allowed;
 }
 
+/* Voice Input Button */
+.chat-voice-btn {
+	width: 16px;
+	height: 16px;
+	align-self: flex-end;
+	background: transparent;
+	color: var(--tl-color-text-2);
+	appearance: none;
+	border: 0;
+	border-radius: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	padding: 0;
+	transition: color 0.15s ease, background 0.15s ease;
+}
+
+.chat-voice-btn:hover {
+	color: var(--tl-color-text);
+}
+
+.chat-voice-btn.active {
+	background: hsl(0, 80%, 55%);
+	color: white;
+	animation: voice-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 hsla(0, 80%, 55%, 0.5);
+		transform: scale(1);
+	}
+
+	50% {
+		box-shadow: 0 0 0 4px hsla(0, 80%, 55%, 0);
+		transform: scale(1.1);
+	}
+}
+
 .chat-actions {
 	display: flex;
 	gap: 8px;
@@ -490,11 +532,11 @@ body {
 	width: 100%;
 }
 
-.agent-action-description > p:first-child {
+.agent-action-description>p:first-child {
 	margin-top: 0;
 }
 
-.agent-action-description > p:last-child {
+.agent-action-description>p:last-child {
 	margin-bottom: 0;
 }
 
@@ -613,32 +655,15 @@ button.prompt-tag span {
 }
 
 .diff-shape-create-shadow {
-	filter: drop-shadow(
-			calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * 1px) 0px rgba(0, 200, 0, 50%)
-		)
-		drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * -1px) 0px rgba(0, 200, 0, 50%))
-		drop-shadow(calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * -1px) 0px rgba(0, 200, 0, 50%))
-		drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * 1px) 0px rgba(0, 200, 0, 50%));
+	filter: drop-shadow(calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * 1px) 0px rgba(0, 200, 0, 50%)) drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * -1px) 0px rgba(0, 200, 0, 50%)) drop-shadow(calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * -1px) 0px rgba(0, 200, 0, 50%)) drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * 1px) 0px rgba(0, 200, 0, 50%));
 }
 
 .diff-shape-delete-shadow {
-	filter: drop-shadow(
-			calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * 1px) 0px rgba(200, 0, 0, 50%)
-		)
-		drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * -1px) 0px rgba(200, 0, 0, 50%))
-		drop-shadow(calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * -1px) 0px rgba(200, 0, 0, 50%))
-		drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * 1px) 0px rgba(200, 0, 0, 50%));
+	filter: drop-shadow(calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * 1px) 0px rgba(200, 0, 0, 50%)) drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * -1px) 0px rgba(200, 0, 0, 50%)) drop-shadow(calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * -1px) 0px rgba(200, 0, 0, 50%)) drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * 1px) 0px rgba(200, 0, 0, 50%));
 }
 
 .diff-shape-update-after-shadow {
-	filter: drop-shadow(
-			calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * 1px) 0px rgba(0, 100, 255, 50%)
-		)
-		drop-shadow(
-			calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * -1px) 0px rgba(0, 100, 255, 50%)
-		)
-		drop-shadow(calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * -1px) 0px rgba(0, 100, 255, 50%))
-		drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * 1px) 0px rgba(0, 100, 255, 50%));
+	filter: drop-shadow(calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * 1px) 0px rgba(0, 100, 255, 50%)) drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * -1px) 0px rgba(0, 100, 255, 50%)) drop-shadow(calc(var(--tl-scale) * 1px) calc(var(--tl-scale) * -1px) 0px rgba(0, 100, 255, 50%)) drop-shadow(calc(var(--tl-scale) * -1px) calc(var(--tl-scale) * 1px) 0px rgba(0, 100, 255, 50%));
 }
 
 /* Chat History Fallback */

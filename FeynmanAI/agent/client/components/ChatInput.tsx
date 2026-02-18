@@ -1,12 +1,14 @@
-import { FormEventHandler, useState } from 'react'
+import { FormEventHandler, useCallback, useState } from 'react'
 import { Editor, useValue } from 'tldraw'
 import { AtIcon } from '../../shared/icons/AtIcon'
 import { BrainIcon } from '../../shared/icons/BrainIcon'
 import { ChevronDownIcon } from '../../shared/icons/ChevronDownIcon'
+import { MicrophoneIcon } from '../../shared/icons/MicrophoneIcon'
 import { AGENT_MODEL_DEFINITIONS, AgentModelName } from '../../shared/models'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
 import { ContextItemTag } from './ContextItemTag'
 import { SelectionTag } from './SelectionTag'
+import { useVoiceInput } from './useVoiceInput'
 
 export function ChatInput({
 	handleSubmit,
@@ -19,6 +21,22 @@ export function ChatInput({
 	const { editor } = agent
 	const [inputValue, setInputValue] = useState('')
 	const isGenerating = useValue('isGenerating', () => agent.requests.isGenerating(), [agent])
+
+	const handleTranscript = useCallback(
+		(text: string) => {
+			setInputValue((prev) => {
+				const newValue = prev ? prev + ' ' + text : text
+				// Also update the textarea DOM element so form submission reads the value
+				if (inputRef.current) {
+					inputRef.current.value = newValue
+				}
+				return newValue
+			})
+		},
+		[inputRef]
+	)
+
+	const { isListening, isSupported, toggleListening } = useVoiceInput(handleTranscript)
 
 	const isContextToolActive = useValue(
 		'isContextToolActive',
@@ -113,6 +131,16 @@ export function ChatInput({
 							<ChevronDownIcon />
 						</div>
 					</div>
+					{isSupported && (
+						<button
+							type="button"
+							className={'chat-voice-btn' + (isListening ? ' active' : '')}
+							onClick={toggleListening}
+							title={isListening ? 'Stop listening' : 'Voice input'}
+						>
+							<MicrophoneIcon />
+						</button>
+					)}
 					<button className="chat-input-submit" disabled={inputValue === '' && !isGenerating}>
 						{isGenerating && inputValue === '' ? '◼' : '⬆'}
 					</button>
