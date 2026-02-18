@@ -26,6 +26,11 @@ export const AGENT_MODEL_DEFINITIONS = {
 	},
 
 	// Google models
+	'gemini-2.0-flash': {
+		name: 'gemini-2.0-flash',
+		id: 'gemini-2.0-flash',
+		provider: 'google',
+	},
 	'gemini-2.5-flash': {
 		name: 'gemini-2.5-flash',
 		id: 'gemini-2.5-flash',

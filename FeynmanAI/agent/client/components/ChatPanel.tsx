@@ -8,6 +8,23 @@ export function ChatPanel() {
 	const agent = useAgent()
 	const inputRef = useRef<HTMLTextAreaElement>(null)
 
+	// Drag-to-resize the right sidebar by updating the CSS variable --sidebar-width
+	const startDrag = useCallback((e: React.MouseEvent) => {
+		e.preventDefault()
+		const onMove = (ev: MouseEvent) => {
+			const min = 200
+			const max = Math.max(300, Math.round(window.innerWidth * 0.8))
+			const newWidth = Math.max(min, Math.min(max, window.innerWidth - ev.clientX))
+			document.documentElement.style.setProperty('--sidebar-width', `${newWidth}px`)
+		}
+		const onUp = () => {
+			document.removeEventListener('mousemove', onMove)
+			document.removeEventListener('mouseup', onUp)
+		}
+		document.addEventListener('mousemove', onMove)
+		document.addEventListener('mouseup', onUp)
+	}, [])
+
 	const handleSubmit = useCallback<FormEventHandler<HTMLFormElement>>(
 		async (e) => {
 			e.preventDefault()
@@ -43,6 +60,8 @@ export function ChatPanel() {
 
 	return (
 		<div className="chat-panel tl-theme__dark">
+			{/* left-edge drag handle for resizing the sidebar */}
+			<div className="chat-drag-handle" onMouseDown={startDrag} aria-hidden />
 			<div className="chat-header">
 				<button className="new-chat-button" onClick={handleNewChat}>
 					+
