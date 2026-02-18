@@ -7,7 +7,6 @@ import {
 
 // Re-export mode-aware schema lookup
 export { getActionSchemaForMode } from '../schema/AgentActionSchemaRegistry'
-//small comment added 
 
 // ============================================================================
 // Type Derivation
