@@ -23,6 +23,13 @@ export const api = {
       body: JSON.stringify(payload)
     }).then(handle)
   },
+  followUp(payload) {
+    return fetch(`${API_BASE}/follow-up`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(handle)
+  },
   generateSql(schema) {
     return fetch(`${API_BASE}/generate-sql`, {
       method: 'POST',

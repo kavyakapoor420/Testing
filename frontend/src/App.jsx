@@ -1,95 +1,146 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Tldraw } from '@tldraw/tldraw'
 import '@tldraw/tldraw/tldraw.css'
 import ChatPanel from './components/ChatPanel'
 import { api } from './lib/api'
 import { parseSchemaFromCanvas, renderSchemaToCanvas } from './lib/canvasSchema'
 
+function createChat(id) {
+  return {
+    id,
+    title: `Chat ${id}`,
+    mode: 'prompt',
+    prompt: '',
+    schema: null,
+    questions: [],
+    questionIndex: 0,
+    answers: {},
+    sql: '',
+    messages: [
+      {
+        role: 'assistant',
+        content:
+          'Describe your business idea. I will generate a visual schema on canvas, then ask relevant questions one-by-one.'
+      }
+    ]
+  }
+}
+
 export default function App() {
   const [loading, setLoading] = useState(false)
-  const [mode, setMode] = useState('prompt')
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content:
-        'Describe your business in plain English. I will draw your first database model on canvas, then ask 5 focused questions one by one.'
-    }
-  ])
-  const [draft, setDraft] = useState('')
-  const [prompt, setPrompt] = useState('')
-  const [schema, setSchema] = useState(null)
-  const [questions, setQuestions] = useState([])
-  const [questionIndex, setQuestionIndex] = useState(0)
-  const [answers, setAnswers] = useState({})
-  const [sql, setSql] = useState('')
   const [editor, setEditor] = useState(null)
+  const [draft, setDraft] = useState('')
+  const [chats, setChats] = useState([createChat(1)])
+  const [activeChatId, setActiveChatId] = useState(1)
 
-  const activeQuestion = useMemo(() => {
-    if (mode !== 'questions') return null
-    return questions[questionIndex] || null
-  }, [mode, questions, questionIndex])
+  const activeChat = useMemo(
+    () => chats.find((chat) => chat.id === activeChatId) || chats[0],
+    [chats, activeChatId]
+  )
 
-  const pushMessage = (role, content) => setMessages((prev) => [...prev, { role, content }])
-
-  const askNextQuestionMessage = (list, index) => {
-    const next = list[index]
-    if (!next) {
-      pushMessage('assistant', 'All clarifications captured. Click Generate SQL, or keep editing the canvas and sync.')
-      setMode('ready')
-      return
-    }
-    pushMessage('assistant', `Question ${index + 1}/${list.length}: ${next.question}`)
+  const updateActiveChat = (updater) => {
+    setChats((prev) => prev.map((chat) => (chat.id === activeChatId ? updater(chat) : chat)))
   }
 
-  const handleStart = async (businessPrompt) => {
+  const pushMessage = (role, content) => {
+    updateActiveChat((chat) => ({ ...chat, messages: [...chat.messages, { role, content }] }))
+  }
+
+  useEffect(() => {
+    if (!editor) return
+    renderSchemaToCanvas(editor, activeChat?.schema)
+  }, [activeChatId, activeChat?.schema, editor])
+
+  const askQuestionMessage = (index, questions) => {
+    const question = questions[index]
+    if (!question) {
+      pushMessage('assistant', 'Done with questions. You can keep chatting for refinements or generate SQL now.')
+      updateActiveChat((chat) => ({ ...chat, mode: 'ready' }))
+      return
+    }
+    pushMessage('assistant', `Question ${index + 1}/${questions.length}: ${question.question}`)
+  }
+
+  const startSchemaFlow = async (text) => {
     setLoading(true)
-    setSql('')
+    pushMessage('user', text)
     try {
-      const res = await api.generateInitial(businessPrompt)
-      setSchema(res.schema)
-      setQuestions(res.questions || [])
-      setQuestionIndex(0)
-      setAnswers({})
-      setMode('questions')
-      if (editor) {
-        renderSchemaToCanvas(editor, res.schema)
-      }
-      pushMessage('assistant', 'Initial schema drafted on canvas. Now I need a few decisions to refine it.')
-      askNextQuestionMessage(res.questions || [], 0)
+      const res = await api.generateInitial(text)
+      updateActiveChat((chat) => ({
+        ...chat,
+        prompt: text,
+        schema: res.schema,
+        questions: res.questions || [],
+        questionIndex: 0,
+        answers: {},
+        sql: '',
+        mode: (res.questions || []).length ? 'questions' : 'ready'
+      }))
+      pushMessage('assistant', 'Initial draft created and drawn on canvas.')
+      askQuestionMessage(0, res.questions || [])
     } catch (err) {
       pushMessage('assistant', `Failed to generate schema: ${err.message}`)
-      setMode('prompt')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleAnswer = async (answerText) => {
-    if (!activeQuestion) return
+  const answerQuestion = async (answerText) => {
+    const question = (activeChat.questions || [])[activeChat.questionIndex]
+    if (!question) return
 
-    const nextAnswers = { ...answers, [activeQuestion.id]: answerText }
-    setAnswers(nextAnswers)
+    const nextAnswers = { ...activeChat.answers, [question.id]: answerText }
+    const nextIndex = activeChat.questionIndex + 1
+
     pushMessage('user', answerText)
+    updateActiveChat((chat) => ({
+      ...chat,
+      answers: nextAnswers,
+      questionIndex: nextIndex
+    }))
 
-    const nextIndex = questionIndex + 1
-    setQuestionIndex(nextIndex)
-
-    if (nextIndex < questions.length) {
-      askNextQuestionMessage(questions, nextIndex)
+    if (nextIndex < activeChat.questions.length) {
+      askQuestionMessage(nextIndex, activeChat.questions)
       return
     }
 
     setLoading(true)
     try {
-      const res = await api.refine({ prompt, schema, answers: nextAnswers })
-      setSchema(res.schema)
-      if (editor) {
-        renderSchemaToCanvas(editor, res.schema)
-      }
-      pushMessage('assistant', 'Schema refined using all your answers and redrawn on canvas.')
-      setMode('ready')
+      const res = await api.refine({
+        prompt: activeChat.prompt,
+        schema: activeChat.schema,
+        answers: nextAnswers
+      })
+      updateActiveChat((chat) => ({
+        ...chat,
+        schema: res.schema,
+        mode: 'ready'
+      }))
+      pushMessage('assistant', 'Schema refined with your answers and updated on canvas.')
     } catch (err) {
       pushMessage('assistant', `Refine failed: ${err.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFollowUp = async (text) => {
+    if (!activeChat.schema) {
+      pushMessage('assistant', 'Generate the first schema before follow-up changes.')
+      return
+    }
+    pushMessage('user', text)
+    setLoading(true)
+    try {
+      const res = await api.followUp({
+        prompt: activeChat.prompt,
+        schema: activeChat.schema,
+        message: text
+      })
+      updateActiveChat((chat) => ({ ...chat, schema: res.schema }))
+      pushMessage('assistant', 'Applied your follow-up request and refreshed the diagram.')
+    } catch (err) {
+      pushMessage('assistant', `Follow-up update failed: ${err.message}`)
     } finally {
       setLoading(false)
     }
@@ -100,44 +151,43 @@ export default function App() {
     if (!text || loading) return
     setDraft('')
 
-    if (mode === 'prompt') {
-      setPrompt(text)
-      pushMessage('user', text)
-      await handleStart(text)
+    if (activeChat.mode === 'prompt') {
+      await startSchemaFlow(text)
       return
     }
 
-    if (mode === 'questions') {
-      await handleAnswer(text)
+    if (activeChat.mode === 'questions') {
+      await answerQuestion(text)
       return
     }
 
-    pushMessage('user', text)
-    pushMessage('assistant', 'For now, use Sync canvas edits or Generate SQL. Follow-up free chat is next step.')
+    await handleFollowUp(text)
   }
 
   const onOptionPick = async (option) => {
-    if (mode !== 'questions') return
-    await handleAnswer(option)
+    if (activeChat.mode === 'questions') {
+      await answerQuestion(option)
+    }
   }
 
   const onSyncCanvas = () => {
-    if (!editor || !schema) return
-    const synced = parseSchemaFromCanvas(editor, schema)
-    setSchema(synced)
-    pushMessage('assistant', 'Canvas edits synced back into schema memory.')
+    if (!editor || !activeChat?.schema) return
+    const synced = parseSchemaFromCanvas(editor, activeChat.schema)
+    updateActiveChat((chat) => ({ ...chat, schema: synced }))
+    pushMessage('assistant', 'Synced manual canvas edits into schema memory.')
   }
 
   const onGenerateSql = async () => {
-    if (!schema) {
-      pushMessage('assistant', 'Generate a schema first.')
+    if (!activeChat?.schema) {
+      pushMessage('assistant', 'Generate schema first.')
       return
     }
+
     setLoading(true)
     try {
-      const res = await api.generateSql(schema)
-      setSql(res.sql)
-      pushMessage('assistant', 'Postgres DDL generated successfully.')
+      const res = await api.generateSql(activeChat.schema)
+      updateActiveChat((chat) => ({ ...chat, sql: res.sql }))
+      pushMessage('assistant', 'SQL generated. Review it below and keep refining if needed.')
     } catch (err) {
       pushMessage('assistant', `SQL generation failed: ${err.message}`)
     } finally {
@@ -145,10 +195,18 @@ export default function App() {
     }
   }
 
+  const onNewChat = () => {
+    const nextId = chats.reduce((mx, c) => Math.max(mx, c.id), 0) + 1
+    const next = createChat(nextId)
+    setChats((prev) => [...prev, next])
+    setActiveChatId(nextId)
+    setDraft('')
+  }
+
   return (
-    <div className="h-screen w-screen bg-slate-100">
+    <div className="h-screen w-screen bg-[#02050b] text-slate-100">
       <div className="flex h-full w-full">
-        <main className="h-full w-[70%] border-r border-slate-200 bg-white">
+        <main className="h-full w-[70%] border-r border-white/10 bg-white">
           <Tldraw
             onMount={(mountedEditor) => {
               setEditor(mountedEditor)
@@ -158,16 +216,17 @@ export default function App() {
 
         <ChatPanel
           loading={loading}
-          messages={messages}
+          chats={chats}
+          activeChatId={activeChatId}
+          activeChat={activeChat}
           draft={draft}
           setDraft={setDraft}
-          mode={mode}
-          activeQuestion={activeQuestion}
           onSubmit={handleSubmit}
           onOptionPick={onOptionPick}
           onGenerateSql={onGenerateSql}
           onSyncCanvas={onSyncCanvas}
-          sql={sql}
+          onNewChat={onNewChat}
+          onSelectChat={setActiveChatId}
         />
       </div>
     </div>

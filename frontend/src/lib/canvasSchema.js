@@ -1,39 +1,52 @@
 import { createShapeId } from '@tldraw/tldraw'
 
 function tableText(table) {
-  const lines = [table.name]
+  const lines = [table.name.toUpperCase()]
   for (const field of table.fields || []) {
     const tags = []
-    if (field.primary_key) tags.push('pk')
-    if (field.unique) tags.push('uniq')
-    if (!field.nullable) tags.push('not null')
-    lines.push(`- ${field.name}: ${field.type}${tags.length ? ` [${tags.join(', ')}]` : ''}`)
+    if (field.primary_key) tags.push('PK')
+    if (field.unique) tags.push('UQ')
+    if (!field.nullable) tags.push('NN')
+    const tagText = tags.length ? ` [${tags.join(',')}]` : ''
+    lines.push(`${field.name}: ${field.type}${tagText}`)
   }
   return lines.join('\n')
 }
 
-export function renderSchemaToCanvas(editor, schema) {
-  if (!editor || !schema) return
+function tableHeight(fieldsCount) {
+  return Math.max(140, 50 + fieldsCount * 22)
+}
 
-  const existingIds = editor
+function clearGenerated(editor) {
+  const ids = editor
     .getCurrentPageShapes()
     .filter((shape) => shape.meta?.schemaGenerated)
     .map((shape) => shape.id)
 
-  if (existingIds.length) {
-    editor.deleteShapes(existingIds)
+  if (ids.length) {
+    editor.deleteShapes(ids)
   }
+}
+
+export function renderSchemaToCanvas(editor, schema) {
+  if (!editor) return
+
+  clearGenerated(editor)
+  if (!schema || !(schema.tables || []).length) return
 
   const spacingX = 420
   const spacingY = 260
-  const tablePos = new Map()
+  const colCount = Math.max(1, Math.ceil(Math.sqrt(schema.tables.length)))
+  const tableMeta = new Map()
 
   const tableShapes = (schema.tables || []).map((table, index) => {
-    const col = index % 2
-    const row = Math.floor(index / 2)
-    const x = 80 + col * spacingX
-    const y = 80 + row * spacingY
-    tablePos.set(table.name, { x, y })
+    const col = index % colCount
+    const row = Math.floor(index / colCount)
+    const x = 70 + col * spacingX
+    const y = 70 + row * spacingY
+    const h = tableHeight((table.fields || []).length)
+
+    tableMeta.set(table.name, { x, y, h })
 
     return {
       id: createShapeId(),
@@ -43,13 +56,12 @@ export function renderSchemaToCanvas(editor, schema) {
       meta: { schemaGenerated: true, tableName: table.name },
       props: {
         geo: 'rectangle',
-        w: 330,
-        h: 190,
+        w: 340,
+        h,
         text: tableText(table),
-        fill: 'solid',
         color: 'blue',
-        size: 'm',
-        align: 'middle'
+        fill: 'semi',
+        size: 'm'
       }
     }
   })
@@ -58,28 +70,31 @@ export function renderSchemaToCanvas(editor, schema) {
     editor.createShapes(tableShapes)
   }
 
-  // Keep relation labels simple and robust for MVP instead of fragile arrow bindings.
-  const relationNotes = (schema.relationships || []).map((rel, idx) => {
-    const source = tablePos.get(rel.from_table)
-    if (!source) return null
+  const relShapes = (schema.relationships || [])
+    .map((rel) => {
+      const from = tableMeta.get(rel.from_table)
+      const to = tableMeta.get(rel.to_table)
+      if (!from || !to) return null
 
-    return {
-      id: createShapeId(),
-      type: 'text',
-      x: source.x + 8,
-      y: source.y + 196 + idx * 18,
-      meta: { schemaGenerated: true, relationshipNote: true },
-      props: {
-        text: `${rel.from_table}.${rel.from_field} -> ${rel.to_table}.${rel.to_field}`,
-        size: 's',
-        color: 'green',
-        autoSize: true
+      return {
+        id: createShapeId(),
+        type: 'arrow',
+        x: 0,
+        y: 0,
+        meta: { schemaGenerated: true, relation: true },
+        props: {
+          start: { x: from.x + 340, y: from.y + from.h / 2 },
+          end: { x: to.x, y: to.y + to.h / 2 },
+          bend: 0,
+          color: 'green',
+          text: `${rel.from_table}.${rel.from_field} -> ${rel.to_table}.${rel.to_field}`
+        }
       }
-    }
-  }).filter(Boolean)
+    })
+    .filter(Boolean)
 
-  if (relationNotes.length) {
-    editor.createShapes(relationNotes)
+  if (relShapes.length) {
+    editor.createShapes(relShapes)
   }
 
   editor.zoomToFit({ animation: { duration: 250 } })
@@ -88,7 +103,7 @@ export function renderSchemaToCanvas(editor, schema) {
 export function parseSchemaFromCanvas(editor, currentSchema) {
   const tableShapes = editor
     .getCurrentPageShapes()
-    .filter((s) => s.type === 'geo' && typeof s.props?.text === 'string')
+    .filter((shape) => shape.type === 'geo' && typeof shape.props?.text === 'string')
 
   if (!tableShapes.length) return currentSchema
 
@@ -99,21 +114,22 @@ export function parseSchemaFromCanvas(editor, currentSchema) {
         .map((line) => line.trim())
         .filter(Boolean)
 
-      if (!lines.length) return null
+      if (lines.length < 1) return null
 
-      const name = lines[0]
+      const name = lines[0].toLowerCase()
       const fields = lines.slice(1).map((line) => {
-        const clean = line.replace(/^-\s*/, '')
-        const [left, metaRaw] = clean.split('[')
-        const [fieldName, fieldType] = left.split(':').map((x) => x?.trim())
-        const meta = (metaRaw || '').toLowerCase()
+        const [left, metaRaw] = line.split('[')
+        const [fieldNameRaw, fieldTypeRaw] = left.split(':')
+        const fieldName = (fieldNameRaw || '').trim().toLowerCase() || 'unknown_field'
+        const fieldType = (fieldTypeRaw || 'text').trim().toLowerCase()
+        const meta = (metaRaw || '').toUpperCase()
 
         return {
-          name: fieldName || 'unknown_field',
-          type: fieldType || 'text',
-          primary_key: meta.includes('pk'),
-          unique: meta.includes('uniq'),
-          nullable: !meta.includes('not null')
+          name: fieldName,
+          type: fieldType,
+          primary_key: meta.includes('PK'),
+          unique: meta.includes('UQ'),
+          nullable: !meta.includes('NN')
         }
       })
 
